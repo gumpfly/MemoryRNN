@@ -3,6 +3,8 @@ import tensorflow as tf
 import os
 import sys
 import tensorflow.contrib.keras as keras
+import BlackBoxFunctions as BBF
+
 
 def conv2d(x, W):
     return tf.nn.conv2d(x, W, strides=[1, 1, 1, 1], padding='SAME')
@@ -49,8 +51,6 @@ config.gpu_options.allow_growth =True
 SysInputs=sys.argv
 
 MNIST=True
-DIGITS=False
-
 
 NoiseMu = 0.4734
 NoiseSig = 0.2517
@@ -61,15 +61,11 @@ def generate_batch(digit,batch_size,T_Max,delta_min,RandImages):
   for i in range(batch_size):
       ArgMax=-1
       j = np.random.randint(1, dataset.test.num_examples, 1)
-      if(MNIST):
-          while (ArgMax!=digit):
-              TrueImage = dataset.train.images[j]
-              TrueLabel = dataset.train.labels[j]
-              ArgMax=np.argmax(TrueLabel)
-              j=j+1
-      else:
-          TrueImage=np.zeros((10))
-          TrueImage[digit]=1
+      while (ArgMax != digit):
+          TrueImage = dataset.train.images[j]
+          TrueLabel = dataset.train.labels[j]
+          ArgMax = np.argmax(TrueLabel)
+          j = j + 1
       t_read = np.random.randint(0, T_Max - delta_min, 1)
       t_report=np.random.randint(t_read+delta_min,np.minimum(t_read+T_Max,T_Max),1)
       t_report_vec[i,t_report]=np.float32(1)
@@ -80,29 +76,30 @@ def generate_batch(digit,batch_size,T_Max,delta_min,RandImages):
 
 
 
-LearningCurr= SysInputs[2]
-Arc= SysInputs[1]
+
+Arc = SysInputs[1]
+LearningCurr = SysInputs[2]
+Instance = SysInputs[3]
+Mode = SysInputs[4]
+
+
 timestepsSample = 15
 timesteps = 15
-Instance =  SysInputs[3]
 BatchSize=1000
 num_hidden=512
-if(DIGITS):
-    num_input=11
-else:
-    num_input=784+1
+
+num_input=784+1
 num_classes=11
 HiddenStateDer='H'
 Noise=1
 LossThres=-100000
 learning_rate=0.001
-if(Arc=="LSTM"):
-    GDSteps = 100000
-else:
-    GDSteps = 100000
 
-FileName='RNNDynamicsPaper/CIFAR/10Dig_'+LearningCurr+'_'+Arc +'_' + Instance
-path='RNNDynamicsPaper/CIFARAttractor/BlackBoxAnalysis/'+Arc+'/'+LearningCurr+'_' + Instance+'/'
+
+FileName = 'RNNDynamicsPaper/CIFAR_SpeedReg/' + Mode + '/' + '10Dig_' + str(LearningCurr) + '_' + Arc + '_' + Instance + '/'
+path = 'RNNDynamicsPaper/CIFARAttractor/' + Mode + '/BlackBoxAnalysis/' + Arc + '/' + LearningCurr + '_' + Instance + '/'
+
+
 
 if not os.path.exists(path):
     os.makedirs(path)
@@ -169,6 +166,8 @@ xRandTensor =CNN(xColor)
 
 with tf.Session(config = config) as sess1:
     xRand = np.mean(sess1.run([xRandTensor])[0],axis=0)
+
+
 xt_Rand = np.concatenate((xRand, [0]), axis=0)
 xt_Rand = np.reshape(xt_Rand, [1, -1]).astype(np.float32)
 xReadOut = np.concatenate((xRand, [1]), axis=0)
@@ -313,82 +312,44 @@ if (Arc == 'GRU'):
 
 init1 = tf.global_variables_initializer()
 
-sess=tf.Session(config = config)
-sess.run(init1)
+with tf.Session(config = config) as sess:
+    sess.run(init1)
 
-NoiseImages = np.random.normal(loc = NoiseMu, scale = NoiseSig, size = (timesteps,32,32,3)).astype('float32')
-FeedImages = np.repeat(NoiseImages[np.newaxis, :, :, :, :], int(BatchSize), axis=0)
+    NoiseImages = np.random.normal(loc = NoiseMu, scale = NoiseSig, size = (timesteps,32,32,3)).astype('float32')
+    FeedImages = np.repeat(NoiseImages[np.newaxis, :, :, :, :], int(BatchSize), axis=0)
 
-if(Arc=='LSTM'):
-    InitHiddenH = np.zeros((10,num_hidden))
-    InitHiddenC = np.zeros((10,num_hidden))
+    if(Arc=='LSTM'):
+        InitHiddenH = np.zeros((10,num_hidden))
+        InitHiddenC = np.zeros((10,num_hidden))
 
-    for Digit in range(10):
-        Images = generate_batch(Digit, BatchSize, timesteps, timesteps - 1, FeedImages)
-        H0, C0 = sess.run([h0, c0], feed_dict={X: Images, H_init: np.zeros((BatchSize, num_hidden)), C_init: np.zeros((BatchSize, num_hidden)), ZerosMat: np.zeros((BatchSize, 1))})
-        HiddenHDigit = H0
-        HiddenCDigit = C0
-        ReadOutH0 = np.argmax(ReadOutLSTM(HiddenHDigit,HiddenCDigit), axis=1) - 1
-        WeightVec = (ReadOutH0 == Digit) / np.count_nonzero(ReadOutH0 == Digit)
-        InitHiddenH[Digit] = np.average(HiddenHDigit, weights=WeightVec, axis=0).astype('float32')
-        InitHiddenC[Digit] = np.average(HiddenCDigit, weights=WeightVec, axis=0).astype('float32')
-    h = tf.Variable(InitHiddenH, dtype=tf.float32)
-    c = tf.Variable(InitHiddenC, dtype=tf.float32)
-
-if(Arc!='LSTM'):
-    InitHiddenH = np.zeros((10,num_hidden))
-
-    for Digit in range(10):
-        Images = generate_batch(Digit, BatchSize, timesteps, timesteps - 1, FeedImages)
-        H0 = sess.run([h0], feed_dict={X: Images, H_init: np.zeros((BatchSize, num_hidden)),ZerosMat: np.zeros((BatchSize, 1))})[0]
-        HiddenHDigit = H0
-        ReadOutH0 = np.argmax(ReadOutGRU(HiddenHDigit), axis=1) - 1
-        WeightVec = (ReadOutH0 == Digit) / np.count_nonzero(ReadOutH0 == Digit)
-        InitHiddenH[Digit] = np.average(HiddenHDigit, axis=0, weights=WeightVec).astype('float32')
-    h = tf.Variable(InitHiddenH, dtype=tf.float32)
-
-xt_rand = tf.constant(xt_Rand)
-LearnRate = tf.placeholder(tf.float32, [])
-if(Arc=='LSTM'):
-    f = tf.sigmoid(tf.matmul(xt_rand, weights['Wf']) + tf.matmul(h, weights['Uf']) + biases['bf'])
-    i = tf.sigmoid(tf.matmul(xt_rand, weights['Wi']) + tf.matmul(h, weights['Ui']) + biases['bi'])
-    o = tf.sigmoid(tf.matmul(xt_rand, weights['Wo']) + tf.matmul(h, weights['Uo']) + biases['bo'])
-    cNew = tf.multiply(f, c) + tf.multiply(i, tf.tanh(tf.matmul(xt_rand, weights['Wc']) + tf.matmul(h, weights['Uc']) + biases['bc']))
-    hDer = tf.multiply(o, tf.tanh(cNew))-h
-    cDer = tf.tanh(cNew) - tf.tanh(c)
-    loss = tf.reduce_sum(tf.square(hDer) + tf.square(cDer))
-    SpeedEach = tf.reduce_sum(tf.square(hDer) + tf.square(cDer),axis=1)
-    optimizer = tf.train.AdamOptimizer(learning_rate=LearnRate)
-    train_op = optimizer.minimize(loss)
-    clip_op = tf.assign(h, tf.clip_by_value(h, -1, 1))
+        for Digit in range(10):
+            Images = generate_batch(Digit, BatchSize, timesteps, timesteps - 1, FeedImages)
+            H0, C0 = sess.run([h0, c0], feed_dict={X: Images, H_init: np.zeros((BatchSize, num_hidden)), C_init: np.zeros((BatchSize, num_hidden)), ZerosMat: np.zeros((BatchSize, 1))})
+            HiddenHDigit = H0
+            HiddenCDigit = C0
+            ReadOutH0 = np.argmax(ReadOutLSTM(HiddenHDigit,HiddenCDigit), axis=1) - 1
+            WeightVec = (ReadOutH0 == Digit) / np.count_nonzero(ReadOutH0 == Digit)
+            InitHiddenH[Digit] = np.average(HiddenHDigit, weights=WeightVec, axis=0).astype('float32')
+            InitHiddenC[Digit] = np.average(HiddenCDigit, weights=WeightVec, axis=0).astype('float32')
 
 
-if(Arc=='GRU'):
-    z = tf.sigmoid(tf.matmul(xt_rand, weights['Wz']) + tf.matmul(h, weights['Uz']) + biases['bz'])
-    r = tf.sigmoid(tf.matmul(xt_rand, weights['Wr']) + tf.matmul(h, weights['Ur']) + biases['br'])
-    hDer = tf.add(tf.multiply(1-z, h), tf.multiply(z, tf.tanh(tf.matmul(xt_rand, weights['Wh']) + tf.matmul(tf.multiply(r, h), weights['Uh']) + biases['bh'])))-h
-    loss= tf.reduce_sum(tf.square(hDer))
-    SpeedEach = tf.reduce_sum(tf.square(hDer),axis=1)
-    optimizer = tf.train.AdamOptimizer(learning_rate=LearnRate)
-    train_op = optimizer.minimize(loss,var_list=[h])
-    clip_op = tf.assign(h, tf.clip_by_value(h, -1, 1))
+    if(Arc!='LSTM'):
+        InitHiddenH = np.zeros((10,num_hidden))
+
+        for Digit in range(10):
+            Images = generate_batch(Digit, BatchSize, timesteps, timesteps - 1, FeedImages)
+            H0 = sess.run([h0], feed_dict={X: Images, H_init: np.zeros((BatchSize, num_hidden)),ZerosMat: np.zeros((BatchSize, 1))})[0]
+            HiddenHDigit = H0
+            ReadOutH0 = np.argmax(ReadOutGRU(HiddenHDigit), axis=1) - 1
+            WeightVec = (ReadOutH0 == Digit) / np.count_nonzero(ReadOutH0 == Digit)
+            InitHiddenH[Digit] = np.average(HiddenHDigit, axis=0, weights=WeightVec).astype('float32')
 
 
-init2 = tf.global_variables_initializer()
 
-sess.run(init2)
-LossP100=1000
-for j in range(GDSteps):
-    if(j==40000):
-        learning_rate = learning_rate/10
-    if(Arc == 'LSTM'):
-        _, lossP, h_fix, c_fix,SpeedDig = sess.run([train_op, loss, h, c, SpeedEach], feed_dict={LearnRate: learning_rate})
-    else:
-        _, lossP, h_fix, SpeedDig=sess.run([train_op,loss,h,SpeedEach],feed_dict={LearnRate: learning_rate})
-    sess.run(clip_op)
-    if(j%100==0):
-        LossP100=lossP
-        print(np.sqrt(lossP))
+if(Arc == 'GRU'):
+    h_fix, SpeedDig = BBF.BlackBoxAlgorithmGRU(RNNVarWeights = weights, RNNVarBiases = biases, InitPointsH = InitHiddenH, RNNInput = xt_Rand)
+if(Arc == 'LSTM'):
+    h_fix, c_fix, SpeedDig = BBF.BlackBoxAlgorithmLSTM(RNNVarWeights = weights, RNNVarBiases = biases, InitPointsH = InitHiddenH, InitPointsC = InitHiddenC, RNNInput = xt_Rand)
 
 
 if (Arc == 'LSTM'):

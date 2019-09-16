@@ -3,9 +3,7 @@ import tensorflow as tf
 import sys
 import time
 import os
-
-
-
+import BlackBoxFunctions as BBF
 
 map_fn = tf.map_fn
 
@@ -41,7 +39,6 @@ NoiseMu = 0.4734
 NoiseSig = 0.2517
 
 
-path=""
 
 
 
@@ -157,27 +154,31 @@ if(Mode!='Init'):
 
     NumRep = 10
 
-    NumRep = 10
+
+
+
+if (Mode == 'CenterMass' or Mode == 'SlowPoints'):
+
     slowpointsH = np.zeros((10*NumRep,512))
 
 
     for i in range(10):
-        slowpointsH[int(i*NumRep):int((i+1)*NumRep)] = np.repeat(np.reshape(np.load('RNNDynamicsPaper/CIFARAttractor/BlackBoxAnalysis/' + Architechture + '/' + LearningCurr + '_' + str(Instance) + '/'+RegPointsH+'.npy')[i],[1, -1]),NumRep,axis =0)
+        slowpointsH[int(i*NumRep):int((i+1)*NumRep)] = np.repeat(np.reshape(np.load('RNNDynamicsPaper/CIFARAttractor/Init/BlackBoxAnalysis/' + Architechture + '/' + LearningCurr + '_' + str(Instance) + '/'+RegPointsH+'.npy')[i],[1, -1]),NumRep,axis =0)
 
     SlowPointH = tf.constant(slowpointsH.astype(np.float32))
 
     if(Architechture == 'LSTM'):
         slowpointsC = np.zeros((10*NumRep, 512))
         for i in range(10):
-            slowpointsC[int(i*NumRep):int((i+1)*NumRep)] =  np.repeat(np.reshape(np.load('RNNDynamicsPaper/CIFARAttractor/BlackBoxAnalysis/'  + Architechture + '/' + LearningCurr + '_' + str(Instance) + '/'+RegPointsC+'.npy')[i],[1, -1]),NumRep,axis =0)
+            slowpointsC[int(i*NumRep):int((i+1)*NumRep)] =  np.repeat(np.reshape(np.load('RNNDynamicsPaper/CIFARAttractor/Init/BlackBoxAnalysis/'  + Architechture + '/' + LearningCurr + '_' + str(Instance) + '/'+RegPointsC+'.npy')[i],[1, -1]),NumRep,axis =0)
         SlowPointC = tf.constant(slowpointsC.astype(np.float32))
 
 
 
-NewFolder = path+SaveFileName
-NewFolderVariables=path+SaveFileName+"/Variables"
-NewFolderSuccess=path+SaveFileName+"/Success"
-NewFolderGraphs=path+SaveFileName+"/Graphs"
+NewFolder = SaveFileName
+NewFolderVariables = SaveFileName+"/Variables"
+NewFolderSuccess = SaveFileName+"/Success"
+NewFolderGraphs = SaveFileName+"/Graphs"
 if not os.path.exists(NewFolder):
     os.makedirs(NewFolder)
     os.makedirs(NewFolderVariables)
@@ -320,6 +321,55 @@ else:
         MaxClasses[210000:240000] = 10
         MaxClasses[240000:training_steps] = num_classes
 
+    W_conv1_1 = weight_variable([3, 3, 3, num_filter1]) / np.sqrt(3 * num_filter1)
+    b_conv1_1 = bias_variable([num_filter1]) / np.sqrt(num_filter1)
+
+    W_conv2_1 = weight_variable([3, 3, num_filter1, num_filter2]) / np.sqrt(num_filter1 * num_filter2)
+    b_conv2_1 = bias_variable([num_filter2]) / np.sqrt(num_filter2)
+
+    W_conv3_1 = weight_variable([3, 3, num_filter2, num_filter3]) / np.sqrt(num_filter2 * num_filter3)
+    b_conv3_1 = bias_variable([num_filter3]) / np.sqrt(num_filter3)
+
+    W_fc1 = tf.Variable(np.random.randn(2048, 2048).astype(np.float32) / np.sqrt(2048))
+    b_fc1 = tf.Variable(0.01 * np.random.randn(2048).astype(np.float32))
+
+    W_fc2 = tf.Variable(np.random.randn(2048, 2048).astype(np.float32) / np.sqrt(2048))
+    b_fc2 = tf.Variable(0.01 * np.random.randn(2048).astype(np.float32))
+
+    W_fc3 = tf.Variable(np.random.randn(2048, 1024).astype(np.float32) / np.sqrt(2048))
+    b_fc3 = tf.Variable(0.01 * np.random.randn(1024).astype(np.float32))
+
+
+    if (USE_LSTM):
+        weights = {'Wf': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Uf': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden)),
+                   'Wi': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Ui': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden)),
+                   'Wo': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Uo': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden)),
+                   'Wc': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Uc': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden))}
+
+        biases = {'bf': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32)),
+                  'bi': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32)),
+                  'bo': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32)),
+                  'bc': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32))}
+
+    if (USE_GRU):
+        weights = {'Wh': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Uh': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden)),
+                   'Wz': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Uz': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden)),
+                   'Wr': tf.Variable(np.random.randn(num_input, num_hidden).astype(np.float32) / np.sqrt(num_input)),
+                   'Ur': tf.Variable(np.random.randn(num_hidden, num_hidden).astype(np.float32) / np.sqrt(num_hidden))}
+
+        biases = {'bh': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32)),
+                  'bz': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32)),
+                  'br': tf.Variable(0.01 * np.random.randn(num_hidden).astype(np.float32))}
+
+    out_weights = tf.Variable(np.random.randn(num_hidden, num_classes).astype(np.float32) / np.sqrt(num_hidden))
+    out_biases = tf.Variable(0.01 * np.random.randn(num_classes).astype(np.float32))
+
 
 def CNN(ColorImage):
     x_image = tf.reshape(ColorImage, [-1, 32, 32, 3])
@@ -339,28 +389,7 @@ def CNN(ColorImage):
     return(h_fc3)
 
 
-ZerosVec = tf.zeros([NumRep*10,1])
 
-def LSTMSpeed(HiddenH,HiddenC):
-    RandImages = dist.sample([NumRep*10, 32, 32, 3])
-    xt_rand = tf.concat((CNN(RandImages),ZerosVec), axis = 1)
-    f = tf.sigmoid(tf.matmul(xt_rand, weights['Wf']) + tf.matmul(HiddenH, weights['Uf']) + biases['bf'])
-    i = tf.sigmoid(tf.matmul(xt_rand, weights['Wi']) + tf.matmul(HiddenH, weights['Ui']) + biases['bi'])
-    o = tf.sigmoid(tf.matmul(xt_rand, weights['Wo']) + tf.matmul(HiddenH, weights['Uo']) + biases['bo'])
-    cNew = tf.multiply(f, HiddenC) + tf.multiply(i, tf.tanh(tf.matmul(xt_rand, weights['Wc']) + tf.matmul(HiddenH, weights['Uc']) + biases['bc']))
-    hDer = tf.multiply(o, tf.tanh(cNew))-HiddenH
-    cDer = tf.tanh(cNew) - tf.tanh(HiddenC)
-    Speed = tf.reduce_sum(tf.square(hDer) + tf.square(cDer))
-    return(Speed)
-
-def GRUSpeed(HiddenH):
-    RandImages = dist.sample([NumRep*10, 32, 32, 3])
-    xt_rand = tf.concat((CNN(RandImages),ZerosVec), axis = 1)
-    z = tf.sigmoid(tf.matmul(xt_rand, weights['Wz']) + tf.matmul(HiddenH, weights['Uz']) + biases['bz'])
-    r = tf.sigmoid(tf.matmul(xt_rand, weights['Wr']) + tf.matmul(HiddenH, weights['Ur']) + biases['br'])
-    hDer = tf.add(tf.multiply(1-z, HiddenH), tf.multiply(z, tf.tanh(tf.matmul(xt_rand, weights['Wh']) + tf.matmul(tf.multiply(r, HiddenH), weights['Uh']) + biases['bh'])))-HiddenH
-    Speed = tf.reduce_sum(tf.square(hDer))
-    return(Speed)
 
 
 def LSTMRNN(x):
@@ -443,12 +472,21 @@ max_in_logits=tf.reduce_max(logits,1)
 
 # Define loss and optimizer
 
-if(USE_LSTM):
-    SpeedLoss = LSTMSpeed(SlowPointH,SlowPointC)  #Loss on Digits and zeros
-    #loss=tf.reduce_mean((t_max-1)*Z*Y*tf.log(prediction+TINY)+alpha*Y*tf.log(prediction+TINY)) - Lambda * L
+if (Mode == 'CenterMass' or Mode == 'SlowPoints'):
+
+    RandImages = dist.sample([NumRep*10, 32, 32, 3])
+    ZerosVec = tf.zeros([NumRep * 10, 1])
+
+    xt_rand = tf.concat((CNN(RandImages),ZerosVec), axis = 1)
+
+    if (USE_LSTM):
+        SpeedLoss = tf.reduce_sum(BBF.HiddenStateSpeedLSTM(RNNVarWeights = weights, RNNVarBiases = biases, HiddenStateH = SlowPointH, HiddenStateC = SlowPointC, RNNInput = xt_rand, RNNInputTF = True))  # Loss on Digits and zeros
+
+    else:
+        SpeedLoss = tf.reduce_sum(BBF.HiddenStateSpeedGRU(RNNVarWeights = weights, RNNVarBiases = biases, HiddenStateH = SlowPointH, RNNInput = xt_rand, RNNInputTF = True))
 else:
-    SpeedLoss = GRUSpeed(SlowPointH)
-    #loss=tf.reduce_mean((t_max-1)*Z*Y*tf.log(prediction+TINY)+alpha*Y*tf.log(prediction+TINY)) - Lambda *
+    SpeedLoss = tf.constant(0.0)
+
 SoftMaxLoss = - tf.reduce_mean((t_max-1)*Z*Y*tf.log(prediction+TINY)+alpha*Y*tf.log(prediction+TINY))
 loss= SoftMaxLoss + Lambda * SpeedLoss
 optimizer = tf.train.AdamOptimizer(learning_rate=LearnRate)
@@ -461,8 +499,15 @@ init = tf.global_variables_initializer()
 
 
 t_this=time.time()
-config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.allow_growth = True
+
+config = tf.ConfigProto(
+      allow_soft_placement=True,
+      log_device_placement=False,
+      )
+
+config.gpu_options.allow_growth =True
+
+
 # Start training
 with tf.Session(config=config) as sess:
     # Run the initializer
@@ -506,29 +551,29 @@ with tf.Session(config=config) as sess:
 
     print("Optimization Finished!")
 
-    np.save(path+SaveFileName+"/Success/TotalHitRate", TotalAccList)
-    np.save(path+SaveFileName+"/Success/DigitsHitRate", DigitAccList)
+    np.save(SaveFileName+"/Success/TotalHitRate", TotalAccList)
+    np.save(SaveFileName+"/Success/DigitsHitRate", DigitAccList)
 
-    np.save(path+SaveFileName+"/Variables/WeightsAtEnd", Weights)
-    np.save(path+SaveFileName+"/Variables/OutWeightsAtEnd", OutWeights)
-    np.save(path+SaveFileName+"/Variables/BiasesAtEnd", Biases)
-    np.save(path+SaveFileName+"/Variables/OutBiasesAtEnd", OutBiases)
+    np.save(SaveFileName+"/Variables/WeightsAtEnd", Weights)
+    np.save(SaveFileName+"/Variables/OutWeightsAtEnd", OutWeights)
+    np.save(SaveFileName+"/Variables/BiasesAtEnd", Biases)
+    np.save(SaveFileName+"/Variables/OutBiasesAtEnd", OutBiases)
 
-    np.save(path+SaveFileName+"/Variables/W_Conv1_1", W_conv1_1.eval())
-    np.save(path+SaveFileName+"/Variables/b_Conv1_1", b_conv1_1.eval())
+    np.save(SaveFileName+"/Variables/W_Conv1_1", W_conv1_1.eval())
+    np.save(SaveFileName+"/Variables/b_Conv1_1", b_conv1_1.eval())
 
-    np.save(path+SaveFileName+"/Variables/W_Conv2_1", W_conv2_1.eval())
-    np.save(path+SaveFileName+"/Variables/b_Conv2_1", b_conv2_1.eval())
+    np.save(SaveFileName+"/Variables/W_Conv2_1", W_conv2_1.eval())
+    np.save(SaveFileName+"/Variables/b_Conv2_1", b_conv2_1.eval())
     #
-    np.save(path+SaveFileName+"/Variables/W_Conv3_1", W_conv3_1.eval())
-    np.save(path+SaveFileName+"/Variables/b_Conv3_1", b_conv3_1.eval())
+    np.save(SaveFileName+"/Variables/W_Conv3_1", W_conv3_1.eval())
+    np.save(SaveFileName+"/Variables/b_Conv3_1", b_conv3_1.eval())
 
 
-    np.save(path+SaveFileName+"/Variables/W_fc1", W_fc1.eval())
-    np.save(path+SaveFileName+"/Variables/b_fc1", b_fc1.eval())
+    np.save(SaveFileName+"/Variables/W_fc1", W_fc1.eval())
+    np.save(SaveFileName+"/Variables/b_fc1", b_fc1.eval())
 
-    np.save(path+SaveFileName+"/Variables/W_fc2", W_fc2.eval())
-    np.save(path+SaveFileName+"/Variables/b_fc2", b_fc2.eval())
+    np.save(SaveFileName+"/Variables/W_fc2", W_fc2.eval())
+    np.save(SaveFileName+"/Variables/b_fc2", b_fc2.eval())
 
-    np.save(path+SaveFileName+"/Variables/W_fc3", W_fc3.eval())
-    np.save(path+SaveFileName+"/Variables/b_fc3", b_fc3.eval())
+    np.save(SaveFileName+"/Variables/W_fc3", W_fc3.eval())
+    np.save(SaveFileName+"/Variables/b_fc3", b_fc3.eval())

@@ -3,7 +3,7 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data
 import os
 import sys
-
+import BlackBoxFunctions as BBF
 
 dataset = input_data.read_data_sets('MNIST_data', one_hot=True)
 
@@ -20,11 +20,12 @@ for digit in range(10):
 
 
 config = tf.ConfigProto(
-      device_count={'CPU': 1, 'GPU': 4},
       allow_soft_placement=True,
+      log_device_placement=False,
       )
 
-config.gpu_options.allow_growth = True
+config.gpu_options.allow_growth =True
+
 
 
 SysInputs=sys.argv
@@ -45,29 +46,27 @@ def generate_batch(digit,batch_size,RandImages):
 
 
 
-LearningCurr= SysInputs[2]
-Arc= SysInputs[1]
+Arc = SysInputs[1]
+LearningCurr = SysInputs[2]
+Instance = SysInputs[3]
+Mode = SysInputs[4]
+
+
 timestepsSample = 15 #int(SysInputs[4])
 timesteps = 15
-Instance =  SysInputs[3]
+
 BatchSize=100
 num_hidden=200
-if(DIGITS):
-    num_input=11
-else:
-    num_input=784+1
+num_input=784+1
 num_classes=11
 HiddenStateDer='H'
 Noise=1
 LossThres=-100000
 learning_rate=0.001
-if(Arc=="LSTM"):
-    GDSteps = 100000
-else:
-    GDSteps = 100000
 
-FileName = 'RNNDynamicsPaper/MNIST/10Dig_' + LearningCurr + '_' + Arc + '_' + Instance
-path = 'RNNDynamicsPaper/MNISTAttractor/BlackBoxAnalysis/' + Arc + '/' + LearningCurr + '_' + Instance + '/'
+FileName = 'RNNDynamicsPaper/MNIST_SpeedReg/' + Mode + '/' + '10Dig_' + str(LearningCurr) + '_' + Arc + '_' + Instance + '/'
+path = 'RNNDynamicsPaper/MNISTAttractor/' + Mode + '/BlackBoxAnalysis/' + Arc + '/' + LearningCurr + '_' + Instance + '/'
+
 
 if not os.path.exists(path):
     os.makedirs(path)
@@ -255,47 +254,10 @@ if(Arc!='LSTM'):
         InitHiddenH[Digit] = np.average(HiddenHDigit, weights=WeightVec, axis=0).astype('float32')
     h = tf.Variable(InitHiddenH, dtype=tf.float32)
 
-xt_rand = tf.constant(xt_Rand)
-LearnRate = tf.placeholder(tf.float32, [])
-if(Arc=='LSTM'):
-    f = tf.sigmoid(tf.matmul(xt_rand, weights['Wf']) + tf.matmul(h, weights['Uf']) + biases['bf'])
-    i = tf.sigmoid(tf.matmul(xt_rand, weights['Wi']) + tf.matmul(h, weights['Ui']) + biases['bi'])
-    o = tf.sigmoid(tf.matmul(xt_rand, weights['Wo']) + tf.matmul(h, weights['Uo']) + biases['bo'])
-    cNew = tf.multiply(f, c) + tf.multiply(i, tf.tanh(tf.matmul(xt_rand, weights['Wc']) + tf.matmul(h, weights['Uc']) + biases['bc']))
-    hDer = tf.multiply(o, tf.tanh(cNew))-h
-    cDer = tf.tanh(cNew) - tf.tanh(c)
-    loss = tf.reduce_sum(tf.square(hDer) + tf.square(cDer))
-    SpeedEach = tf.reduce_sum(tf.square(hDer) + tf.square(cDer),axis=1)
-    optimizer = tf.train.AdamOptimizer(learning_rate=LearnRate)
-    train_op = optimizer.minimize(loss)
-    clip_op = tf.assign(h, tf.clip_by_value(h, -1, 1))
-
-if(Arc=='GRU'):
-    z = tf.sigmoid(tf.matmul(xt_rand, weights['Wz']) + tf.matmul(h, weights['Uz']) + biases['bz'])
-    r = tf.sigmoid(tf.matmul(xt_rand, weights['Wr']) + tf.matmul(h, weights['Ur']) + biases['br'])
-    hDer = tf.add(tf.multiply(1-z, h), tf.multiply(z, tf.tanh(tf.matmul(xt_rand, weights['Wh']) + tf.matmul(tf.multiply(r, h), weights['Uh']) + biases['bh'])))-h
-    loss= tf.reduce_sum(tf.square(hDer))
-    SpeedEach = tf.reduce_sum(tf.square(hDer),axis=1)
-    optimizer = tf.train.AdamOptimizer(learning_rate=LearnRate)
-    train_op = optimizer.minimize(loss,var_list=[h])
-    clip_op = tf.assign(h, tf.clip_by_value(h, -1, 1))
-
-
-init2 = tf.global_variables_initializer()
-
-sess.run(init2)
-LossP100=1000
-for j in range(GDSteps):
-    if(j==40000):
-        learning_rate = learning_rate/10
-    if(Arc == 'LSTM'):
-        _, lossP, h_fix, c_fix,SpeedDig = sess.run([train_op, loss, h, c, SpeedEach], feed_dict={LearnRate: learning_rate})
-    else:
-        _, lossP, h_fix, SpeedDig=sess.run([train_op,loss,h,SpeedEach],feed_dict={LearnRate: learning_rate})
-    sess.run(clip_op)
-    if(j%100==0):
-        LossP100=lossP
-        print(np.sqrt(lossP))
+if(Arc == 'GRU'):
+    h_fix, SpeedDig = BBF.BlackBoxAlgorithmGRU(RNNVarWeights = weights, RNNVarBiases = biases, InitPointsH = InitHiddenH, RNNInput = xt_Rand)
+if(Arc == 'LSTM'):
+    h_fix, c_fix, SpeedDig = BBF.BlackBoxAlgorithmLSTM(RNNVarWeights = weights, RNNVarBiases = biases, InitPointsH = InitHiddenH, InitPointsC = InitHiddenC, RNNInput = xt_Rand)
 #
 
 
